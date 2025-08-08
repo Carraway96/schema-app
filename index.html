@@ -1,0 +1,482 @@
+<!doctype html>
+<html lang="sv">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Schema – Smågrupper</title>
+  <link rel="manifest" href="manifest.webmanifest">
+  <link rel="icon" href="conflict-placeholder.png">
+  <meta name="color-scheme" content="dark only">
+  <style>
+    :root {
+      --bg: #0f1115; --panel: #161a22; --text: #e7e9ee; --muted: #9aa3b2; --accent: #4f8cff;
+      --danger:#ff5d5d; --border:#2a3140; --chip:#242b37; --card:#1a202c;
+    }
+    *{box-sizing:border-box} body{margin:0;background:var(--bg);color:var(--text);font-family:system-ui,-apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif}
+    header{display:grid;grid-template-columns:1fr auto auto auto;gap:12px;align-items:center;padding:14px 16px;border-bottom:1px solid var(--border);background:#0d1016;position:sticky;top:0;z-index:10}
+    h1{font-size:18px;margin:0;font-weight:600} .row{display:flex;gap:10px;align-items:center;flex-wrap:wrap}
+    button,select,input[type=time],input[type=text],input[type=number],input[type=color]{background:var(--panel);color:var(--text);border:1px solid var(--border);padding:8px 10px;border-radius:10px;font-size:14px}
+    button.primary{background:var(--accent);border-color:var(--accent);color:#fff}
+    button.small{padding:6px 8px;font-size:12px}
+    .wrap{display:grid;grid-template-columns:300px 1fr;gap:14px;padding:14px}
+    .panel{background:var(--panel);border:1px solid var(--border);border-radius:12px;padding:12px}
+    .grid{display:grid;grid-template-columns:1fr 1fr;gap:14px}
+    .col{background:var(--panel);border:1px solid var(--border);border-radius:12px}
+    .col header{display:flex;align-items:center;gap:10px;padding:10px 12px;border-bottom:1px solid var(--border)}
+    .lessons{padding:10px;display:flex;flex-direction:column;gap:10px;min-height:120px}
+    .lesson{background:var(--card);border:1px solid var(--border);border-radius:12px;overflow:hidden}
+    .lesson-head{display:flex;gap:10px;align-items:center;padding:10px 12px;cursor:pointer}
+    .subject-chip{padding:4px 8px;border-radius:999px;font-weight:600;font-size:12px;background:var(--chip);border:1px solid var(--border)}
+    .timeplace{color:var(--muted);font-size:13px}.grow{flex:1}
+    .icon,.conflict-icon{width:18px;height:18px}
+    .details{display:none;border-top:1px solid var(--border);padding:8px 12px}
+    .student{display:flex;align-items:center;gap:8px;padding:6px 0;border-bottom:1px dashed #202839}
+    .student:last-child{border-bottom:none}
+    .badge{font-size:11px;color:var(--muted);background:#0c1018;border:1px solid var(--border);padding:2px 6px;border-radius:8px}
+    .kicker{color:var(--muted);font-size:12px}
+    .list{display:flex;flex-direction:column;gap:8px;max-height:calc(100vh - 260px);overflow:auto}
+    .search{width:100%}
+    dialog{border:1px solid var(--border);border-radius:12px;background:var(--panel);color:var(--text)}
+    dialog[open]{animation:pop .12s ease-out}@keyframes pop{from{transform:scale(.98);opacity:.5}to{transform:scale(1);opacity:1}}
+    .form{display:grid;gap:10px;grid-template-columns:1fr 1fr}.full{grid-column:1/-1}
+    .table{width:100%;border-collapse:collapse}.table th,.table td{border-bottom:1px solid var(--border);text-align:left;padding:8px;font-size:13px}
+    .note{color:var(--muted);font-size:12px}
+    .hidden{display:none}
+    .overlay{position:fixed;inset:0;background:rgba(0,0,0,.7);display:none;align-items:center;justify-content:center;z-index:1000}
+    .overlay .card{background:var(--panel);border:1px solid var(--border);border-radius:14px;padding:18px;width:min(680px,95vw)}
+    .overlay h2{margin:0 0 6px}
+    .pill{padding:2px 6px;border-radius:999px;border:1px solid var(--border);background:#0d121b;font-size:11px}
+  </style>
+</head>
+<body>
+  <header>
+    <h1>Schema – smågrupper</h1>
+    <div class="row">
+      <button id="btnAddLesson" class="primary">Lägg till lektion</button>
+      <button id="btnEditLesson">Redigera lektion</button>
+      <button id="btnEditStudent">Redigera elev</button>
+      <button id="btnEditColors">Färger</button>
+    </div>
+    <div class="row">
+      <button id="btnPickDB" class="small">Byt databas</button>
+      <button id="btnSaveNow" class="small">Spara</button>
+      <button id="btnExport" class="small">Exportera</button>
+      <button id="btnImport" class="small">Importera</button>
+      <label class="kicker">Autospara <input type="checkbox" id="autoSave"></label>
+      <button id="btnPassword" class="small">Lösenord</button>
+      <div class="kicker" id="lockState">🔓 Oskyddad</div>
+    </div>
+    <div class="row">
+      <div class="kicker">Vecka <span id="weekno">–</span></div>
+      <label for="weekday" class="kicker">Veckodag</label>
+      <select id="weekday">
+        <option value="1">Mån</option><option value="2">Tis</option><option value="3">Ons</option>
+        <option value="4">Tor</option><option value="5">Fre</option><option value="6">Lör</option><option value="0">Sön</option>
+      </select>
+      <span class="pill" id="aliasPill" title="Databasalias"></span>
+    </div>
+  </header>
+
+  <div class="wrap">
+    <aside class="panel">
+      <h2>Elevlista</h2>
+      <input id="search" class="search" placeholder="Sök elev..." />
+      <div class="list" id="studentList" style="margin-top:10px;"></div>
+      <div class="note" style="margin-top:8px">Konfliktikon (PNG): <input id="conflictIconPicker" type="file" accept="image/png"></div>
+      <div class="note">Tips: spara databasen som <code>.schema.json</code> för bästa OS-integration.</div>
+    </aside>
+
+    <main class="grid">
+      <section class="col" id="colMix">
+        <header><h3>Mix</h3><span id="countMix" class="kicker"></span></header>
+        <div id="lessonsMix" class="lessons"></div>
+      </section>
+      <section class="col" id="colStor">
+        <header><h3>Stor klass</h3><span id="countStor" class="kicker"></span></header>
+        <div id="lessonsStor" class="lessons"></div>
+      </section>
+    </main>
+  </div>
+
+  <!-- First-run helper -->
+  <div id="firstRun" class="overlay">
+    <div class="card">
+      <h2>Välkommen! 🚀</h2>
+      <ul>
+        <li>Den här versionen försöker öppna rätt databas <b>automatiskt</b>.</li>
+        <li>Om du blir ombedd: välj din fil (helst <code>.schema.json</code>) i OneDrive.</li>
+        <li>Nästa gång öppnas filen direkt.</li>
+      </ul>
+      <div style="display:flex;justify-content:flex-end;gap:8px">
+        <button id="btnFirstRunClose" class="primary">Kör igång</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Dialogs (password, lesson, pick lesson, student, colors) -->
+  <dialog id="dlgPassword">
+    <form method="dialog" class="form" id="pwdForm">
+      <h3 class="full">Databas-lösenord</h3>
+      <div class="full">Lämna tomt för oskyddad databas. Byter du lösenord, sparas filen om i krypterad/okrypterad form.</div>
+      <div><label>Nytt lösenord</label><input id="pwd1" type="password"></div>
+      <div><label>Upprepa</label><input id="pwd2" type="password"></div>
+      <div class="full" style="display:flex;justify-content:flex-end;gap:8px"><button value="cancel">Avbryt</button><button id="btnSavePwd" class="primary">Spara</button></div>
+    </form>
+  </dialog>
+
+  <dialog id="dlgLesson">
+    <form method="dialog" id="lessonForm" class="form">
+      <h3 id="dlgLessonTitle" class="full">Ny lektion</h3>
+      <div><label>Ämne</label><input id="fSubject" required></div>
+      <div><label>Plats</label><input id="fPlace" required></div>
+      <div><label>Veckodag</label><select id="fDay" required><option value="1">Mån</option><option value="2">Tis</option><option value="3">Ons</option><option value="4">Tor</option><option value="5">Fre</option></select></div>
+      <div><label>Typ</label><select id="fType" required><option>Mix</option><option>Stor klass</option></select></div>
+      <div><label>Start</label><input id="fStart" type="time" required></div>
+      <div><label>Slut</label><input id="fEnd" type="time" required></div>
+      <div class="full"><label>Elever</label><select id="fStudents" multiple size="8"></select></div>
+      <div class="full" style="display:flex;justify-content:flex-end;gap:8px"><button value="cancel">Avbryt</button><button id="btnSaveLesson" value="default" class="primary">Spara</button></div>
+    </form>
+  </dialog>
+
+  <dialog id="dlgPickLesson">
+    <form method="dialog" class="form">
+      <h3 class="full">Redigera/Ta bort lektion</h3>
+      <div class="full">
+        <table class="table" id="tblLessons"><thead><tr><th>Ämne</th><th>Dag</th><th>Tid</th><th>Plats</th><th>Typ</th><th>Elever</th></tr></thead><tbody></tbody></table>
+      </div>
+      <div class="full" style="display:flex;justify-content:flex-end;gap:8px"><button value="cancel">Stäng</button></div>
+    </form>
+  </dialog>
+
+  <dialog id="dlgStudent">
+    <form method="dialog" id="studentForm" class="form">
+      <h3 class="full">Redigera elev</h3>
+      <div class="full"><label>Välj elev</label><select id="pickStudent"></select></div>
+      <div><label>Namn</label><input id="sName"></div>
+      <div><label>Klass (7–9)</label><input id="sKlass" type="number" min="7" max="9"></div>
+      <div class="full" style="display:flex;justify-content:space-between;gap:8px"><button id="btnDeleteStudent" class="danger" value="delete">Ta bort elev</button><div><button value="cancel">Stäng</button><button id="btnSaveStudent" value="default" class="primary">Spara</button></div></div>
+      <hr class="full"><h4 class="full">Ny elev</h4>
+      <div><label>Namn</label><input id="nName"></div>
+      <div><label>Klass (7–9)</label><input id="nKlass" type="number" min="7" max="9"></div>
+      <div class="full" style="display:flex;justify-content:flex-end;gap:8px"><button id="btnAddStudent" class="small">Lägg till elev</button></div>
+    </form>
+  </dialog>
+
+  <dialog id="dlgColors">
+    <form method="dialog" class="form" id="colorForm">
+      <h3 class="full">Ämnesfärger</h3>
+      <div id="colorRows" class="full"></div>
+      <div class="full" style="display:flex;justify-content:space-between;gap:8px"><button id="btnResetAuto">Återställ auto-färger</button><div><button value="cancel">Stäng</button><button id="btnSaveColors" class="primary">Spara</button></div></div>
+    </form>
+  </dialog>
+
+  <script>
+    // ===== Utilities =====
+    const idb = {
+      db:null, async open(){return new Promise((res,rej)=>{const req=indexedDB.open('schema-release',1);req.onupgradeneeded=e=>e.target.result.createObjectStore('kv');req.onsuccess=()=>{this.db=req.result;res()};req.onerror=()=>rej(req.error);});},
+      async get(k){if(!this.db)await this.open();return new Promise((res,rej)=>{const tx=this.db.transaction('kv','readonly');const st=tx.objectStore('kv');const g=st.get(k);g.onsuccess=()=>res(g.result);g.onerror=()=>rej(g.error);});},
+      async set(k,v){if(!this.db)await this.open();return new Promise((res,rej)=>{const tx=this.db.transaction('kv','readwrite');const st=tx.objectStore('kv');const p=st.put(v,k);p.onsuccess=()=>res();p.onerror=()=>rej(p.error);});}
+    };
+    const dayNames = {0:"Sön",1:"Mån",2:"Tis",3:"Ons",4:"Tor",5:"Fre",6:"Lör"};
+    function getTodayKey(d=new Date()) { return d.toISOString().slice(0,10); }
+    function timeToMinutes(t) { const [h,m]=t.split(":").map(Number); return h*60+m; }
+    function overlaps(aStart, aEnd, bStart, bEnd) {
+      const as = timeToMinutes(aStart), ae = timeToMinutes(aEnd), bs = timeToMinutes(bStart), be = timeToMinutes(bEnd);
+      return Math.max(as, bs) < Math.min(ae, be);
+    }
+    function classSort(a,b){ return (a.klass - b.klass) || a.name.localeCompare(b.name); }
+    // Crypto (same as secure build)
+    function strToBuf(str){ return new TextEncoder().encode(str); }
+    function bufToB64(buf){ return btoa(String.fromCharCode(...new Uint8Array(buf))); }
+    function b64ToBuf(b64){ return Uint8Array.from(atob(b64), c=>c.charCodeAt(0)); }
+    async function deriveKey(password, salt, iterations=250000){
+      const keyMaterial = await crypto.subtle.importKey('raw', strToBuf(password), 'PBKDF2', false, ['deriveKey']);
+      return crypto.subtle.deriveKey({name:'PBKDF2',hash:'SHA-256',salt,iterations}, keyMaterial, {name:'AES-GCM',length:256}, false, ['encrypt','decrypt']);
+    }
+    async function encryptJSON(obj, password){
+      const salt = crypto.getRandomValues(new Uint8Array(16));
+      const iv = crypto.getRandomValues(new Uint8Array(12));
+      const key = await deriveKey(password, salt);
+      const plaintext = strToBuf(JSON.stringify(obj));
+      const ct = await crypto.subtle.encrypt({name:'AES-GCM',iv}, key, plaintext);
+      return { enc:true, ver:1, alg:'AES-GCM', kdf:'PBKDF2', hash:'SHA-256', iterations:250000, salt:bufToB64(salt), iv:bufToB64(iv), ciphertext:bufToB64(ct) };
+    }
+    async function decryptJSON(wrapped, password){
+      const key = await deriveKey(password, b64ToBuf(wrapped.salt), wrapped.iterations||250000);
+      const ptBuf = await crypto.subtle.decrypt({name:'AES-GCM', iv:b64ToBuf(wrapped.iv)}, key, b64ToBuf(wrapped.ciphertext));
+      return JSON.parse(new TextDecoder().decode(ptBuf));
+    }
+
+    // ===== App state =====
+    const supportsFS = 'showOpenFilePicker' in window;
+    let fileHandle = null; let autoSave = false; let currentPassword = null;
+    let dbAlias = null; // from URL/config
+    const defaultDB = { version:4, students:[], lessons:[], subjectColors:{}, settings:{ conflictIconDataURL:null } };
+    let DB = structuredClone(defaultDB);
+
+    function ensureColorForSubject(subject) {
+      if (!DB.subjectColors[subject]) {
+        let hash = 0; for (let i=0;i<subject.length;i++) hash = subject.charCodeAt(i) + ((hash<<5)-hash);
+        const hue = Math.abs(hash) % 360; DB.subjectColors[subject] = `hsl(${hue} 40% 30%)`;
+      }
+      return DB.subjectColors[subject];
+    }
+    function studentsForLesson(lesson){ return DB.students.filter(s => lesson.studentIds.includes(s.id)); }
+    function conflictsFor(lesson, student){
+      const others = DB.lessons.filter(l => l.day===lesson.day && l.type!==lesson.type && l.studentIds.includes(student.id));
+      const out = [];
+      for (const o of others){
+        if (overlaps(lesson.start, lesson.end, o.start, o.end)){
+          const ls = timeToMinutes(lesson.start), le = timeToMinutes(lesson.end);
+          const os = timeToMinutes(o.start), oe = timeToMinutes(o.end);
+          if (oe > ls && os <= ls) out.push({kind:"lateFrom", from:o});
+          else if (os < le && os >= ls) out.push({kind:"leaveEarlyTo", to:o});
+          else out.push({kind:"overlap", other:o});
+        }
+      }
+      return out;
+    }
+    function studentIsAbsentToday(student){ return (student.absentDates||[]).includes(getTodayKey()); }
+    function isoWeekNumber(date) {
+      const d = new Date(Date.UTC(date.getFullYear(), date.getMonth(), date.getDate()));
+      const dayNum = d.getUTCDay() || 7; d.setUTCDate(d.getUTCDate() + 4 - dayNum);
+      const yearStart = new Date(Date.UTC(d.getUTCFullYear(),0,1));
+      return Math.ceil((((d - yearStart) / 86400000) + 1)/7);
+    }
+    function updateLockState(){ document.getElementById('lockState').textContent = currentPassword ? "🔒 Krypterad" : "🔓 Oskyddad"; }
+    function setAliasPill(){ const p=document.getElementById('aliasPill'); p.textContent = dbAlias ? `Alias: ${dbAlias}` : ""; p.classList.toggle('hidden', !dbAlias); }
+
+    // ===== Persistence =====
+    function saveLocal(){ localStorage.setItem('schemaDB', JSON.stringify(DB)); }
+    function loadLocal(){ const raw=localStorage.getItem('schemaDB'); if (raw) { try { DB=JSON.parse(raw); } catch {} } }
+    async function bindAliasToHandle(alias, handle){ if (!alias || !handle) return; await idb.set('alias:'+alias, handle); }
+    async function resolveAliasHandle(alias){ if (!alias) return null; try { return await idb.get('alias:'+alias); } catch { return null; } }
+
+    async function pickDB(){
+      try {
+        const [handle] = await window.showOpenFilePicker({ types:[{description:"JSON", accept:{"application/json":[".json",".schema.json"]}}], multiple:false });
+        fileHandle = handle; if (dbAlias) await bindAliasToHandle(dbAlias, fileHandle);
+        await loadFromHandle();
+      } catch(e){ console.warn(e); }
+    }
+    async function loadFromHandle(){
+      if (!fileHandle) return;
+      try {
+        if (await fileHandle.queryPermission({mode:'read'})!=='granted'){
+          if (await fileHandle.requestPermission({mode:'read'})!=='granted'){ alert("Behörighet nekad."); return; }
+        }
+        const file = await fileHandle.getFile(); const text = await file.text();
+        let obj=null; try { obj=JSON.parse(text); } catch {}
+        if (obj && obj.enc){
+          let ok=false;
+          while(!ok){
+            const pwd = prompt("Denna databas är lösenordsskyddad. Ange lösenord:"); if (pwd===null) return;
+            try { DB = await decryptJSON(obj, pwd); currentPassword = pwd; ok=true; } catch { alert("Fel lösenord."); }
+          }
+        } else if (obj){ DB=obj; currentPassword=null; }
+        else { alert("Kunde inte läsa filen."); return; }
+        saveLocal(); renderAll(); updateLockState();
+      } catch(e){ console.error(e); alert("Misslyckades att läsa filen."); }
+    }
+    async function saveToHandle(){
+      if (!fileHandle) return;
+      if (await fileHandle.queryPermission({mode:'readwrite'})!=='granted'){
+        if (await fileHandle.requestPermission({mode:'readwrite'})!=='granted'){ alert("Behörighet nekad vid skrivning."); return; }
+      }
+      let data = currentPassword ? JSON.stringify(await encryptJSON(DB,currentPassword),null,2) : JSON.stringify(DB,null,2);
+      const w = await fileHandle.createWritable(); await w.write(data); await w.close();
+    }
+    async function saveDB(triggeredByUser=false){ saveLocal(); if ((autoSave||triggeredByUser) && fileHandle) await saveToHandle(); }
+
+    // ===== UI render =====
+    function renderAll(){
+      const wd = Number(document.getElementById('weekday').value);
+      const mix = DB.lessons.filter(l => l.day===wd && l.type==="Mix").sort((a,b)=> timeToMinutes(a.start)-timeToMinutes(b.start));
+      const stor = DB.lessons.filter(l => l.day===wd && l.type==="Stor klass").sort((a,b)=> timeToMinutes(a.start)-timeToMinutes(b.start));
+      document.getElementById('lessonsMix').innerHTML = ""; document.getElementById('lessonsStor').innerHTML = "";
+      document.getElementById('countMix').textContent = mix.length ? `${mix.length} lektioner` : "Inga lektioner";
+      document.getElementById('countStor').textContent = stor.length ? `${stor.length} lektioner` : "Inga lektioner";
+      for (const l of mix){ document.getElementById('lessonsMix').appendChild(renderLessonCard(l)); }
+      for (const l of stor){ document.getElementById('lessonsStor').appendChild(renderLessonCard(l)); }
+      renderStudentList();
+      document.getElementById('weekno').textContent = String(isoWeekNumber(new Date()));
+      saveLocal();
+    }
+    function renderLessonCard(lesson){
+      const el = document.createElement('div'); el.className="lesson";
+      const head = document.createElement('div'); head.className="lesson-head";
+      const chip = document.createElement('span'); chip.className="subject-chip"; chip.textContent=lesson.subject;
+      chip.style.background = ensureColorForSubject(lesson.subject); chip.style.borderColor="rgba(255,255,255,.08)";
+      const tp = document.createElement('div'); tp.className="timeplace"; tp.textContent=`${lesson.start}–${lesson.end} • ${lesson.place}`;
+      const grow = document.createElement('div'); grow.className="grow";
+      const icon = document.createElement('img'); icon.className="conflict-icon hidden"; icon.src=conflictIconURL(); icon.alt="konflikt";
+      head.appendChild(chip); head.appendChild(tp); head.appendChild(grow); head.appendChild(icon);
+      el.appendChild(head);
+      const det = document.createElement('div'); det.className="details";
+      let list = studentsForLesson(lesson).filter(s=>!studentIsAbsentToday(s)).sort(classSort);
+      let anyConflict=false;
+      for (const s of list){
+        const row = document.createElement('div'); row.className="student";
+        const nm = document.createElement('div'); nm.textContent = s.name;
+        const confs = conflictsFor(lesson, s);
+        if (confs.length){ anyConflict=true; const ic=document.createElement('img'); ic.src=conflictIconURL(); ic.className="icon"; row.appendChild(ic); }
+        const badge = document.createElement('span'); badge.className="badge"; badge.textContent=`Åk ${s.klass}`;
+        row.appendChild(nm); row.appendChild(badge); det.appendChild(row);
+      }
+      if (anyConflict) icon.classList.remove('hidden');
+      el.appendChild(det);
+      head.addEventListener('click', ()=>{ det.style.display = det.style.display==="block" ? "none" : "block"; });
+      return el;
+    }
+    function renderStudentList(){
+      const wrap = document.getElementById('studentList'); wrap.innerHTML="";
+      const groups={7:[],8:[],9:[]};
+      for (const s of DB.students){ groups[s.klass]=groups[s.klass]||[]; groups[s.klass].push(s); }
+      for (const k of [7,8,9]){
+        const arr = (groups[k]||[]).sort((a,b)=>a.name.localeCompare(b.name));
+        if (!arr.length) continue;
+        const gl=document.createElement('div'); gl.className="kicker"; gl.textContent=`Årskurs ${k}`; wrap.appendChild(gl);
+        for (const s of arr){
+          const row = document.createElement('div'); row.className="row";
+          const left = document.createElement('div'); left.textContent=s.name;
+          const right = document.createElement('div'); right.className="row";
+          const cb=document.createElement('input'); cb.type="checkbox"; cb.title="Frånvaro idag";
+          cb.checked = studentIsAbsentToday(s);
+          cb.addEventListener('change', ()=>{
+            const today=getTodayKey(); s.absentDates=s.absentDates||[];
+            if (cb.checked){ if (!s.absentDates.includes(today)) s.absentDates.push(today); }
+            else { s.absentDates = s.absentDates.filter(d=>d!==today); }
+            saveDB(); renderAll();
+          });
+          right.appendChild(cb);
+          row.appendChild(left); row.appendChild(right);
+          if (cb.checked) row.style.opacity=.6;
+          wrap.appendChild(row);
+        }
+      }
+      if (!wrap.children.length){ const p=document.createElement('div'); p.className="kicker"; p.textContent="Inga elever."; wrap.appendChild(p); }
+    }
+    function conflictIconURL(){ return DB.settings?.conflictIconDataURL || "conflict-placeholder.png"; }
+
+    // ===== Dialogs =====
+    function openPasswordDialog(){
+      const dlg=document.getElementById('dlgPassword'); const p1=document.getElementById('pwd1'); const p2=document.getElementById('pwd2');
+      p1.value=""; p2.value=""; dlg.showModal();
+      dlg.querySelector('#btnSavePwd').onclick = async (e)=>{
+        e.preventDefault(); if (p1.value!==p2.value){ alert("Lösenorden matchar inte."); return; }
+        currentPassword = (p1.value||"").trim()||null; await saveDB(true); updateLockState(); dlg.close();
+      };
+    }
+    function openLessonDialog(existing=null){
+      const dlg=document.getElementById('dlgLesson');
+      document.getElementById('dlgLessonTitle').textContent = existing ? "Redigera lektion" : "Ny lektion";
+      const fSub = document.getElementById('fSubject'), fPlace=document.getElementById('fPlace'), fDay=document.getElementById('fDay'), fType=document.getElementById('fType'), fStart=document.getElementById('fStart'), fEnd=document.getElementById('fEnd'), fStudents=document.getElementById('fStudents');
+      fStudents.innerHTML=""; for (const s of DB.students.sort(classSort)){ const o=document.createElement('option'); o.value=s.id; o.textContent=`${s.name} (Åk ${s.klass})`; fStudents.appendChild(o); }
+      if (existing){ fSub.value=existing.subject; fPlace.value=existing.place; fDay.value=String(existing.day); fType.value=existing.type; fStart.value=existing.start; fEnd.value=existing.end; for (const id of existing.studentIds){ const o=[...fStudents.options].find(x=>x.value===id); if (o) o.selected=true; } }
+      else { fSub.value=""; fPlace.value=""; fDay.value=document.getElementById('weekday').value; fType.value="Mix"; fStart.value=""; fEnd.value=""; }
+      dlg.returnValue=""; dlg.showModal();
+      dlg.querySelector('#btnSaveLesson').onclick = async (e)=>{
+        e.preventDefault();
+        const obj = existing || { id: crypto.randomUUID() };
+        obj.subject=fSub.value.trim(); obj.place=fPlace.value.trim(); obj.day=Number(fDay.value); obj.type=fType.value; obj.start=fStart.value; obj.end=fEnd.value;
+        obj.studentIds=[...fStudents.options].filter(o=>o.selected).map(o=>o.value);
+        if (!existing) DB.lessons.push(obj); await saveDB(true); dlg.close(); renderAll();
+      };
+    }
+    function openPickLesson(){
+      const dlg=document.getElementById('dlgPickLesson'); const tbody=dlg.querySelector('tbody'); tbody.innerHTML="";
+      for (const l of DB.lessons.slice().sort((a,b)=>(a.day-b.day)||timeToMinutes(a.start)-timeToMinutes(b.start))){
+        const tr=document.createElement('tr'); const td=t=>{const x=document.createElement('td'); x.textContent=t; return x;};
+        tr.appendChild(td(l.subject)); tr.appendChild(td(dayNames[l.day])); tr.appendChild(td(`${l.start}–${l.end}`)); tr.appendChild(td(l.place)); tr.appendChild(td(l.type)); tr.appendChild(td(String(l.studentIds.length)));
+        tr.style.cursor="pointer"; tr.onclick=()=>openLessonDialog(l);
+        tr.ondblclick=async ()=>{ if (confirm("Ta bort denna lektion?")){ DB.lessons = DB.lessons.filter(x=>x.id!==l.id); await saveDB(true); openPickLesson(); renderAll(); } };
+        tbody.appendChild(tr);
+      }
+      dlg.showModal();
+    }
+    function openStudentDialog(){
+      const dlg=document.getElementById('dlgStudent'); const pick=document.getElementById('pickStudent'), sName=document.getElementById('sName'), sKlass=document.getElementById('sKlass'), nName=document.getElementById('nName'), nKlass=document.getElementById('nKlass');
+      function refresh(){ pick.innerHTML=""; for (const s of DB.students.slice().sort(classSort)){ const o=document.createElement('option'); o.value=s.id; o.textContent=`${s.name} (Åk ${s.klass})`; pick.appendChild(o); } const s=DB.students.find(x=>x.id===pick.value); if (s){ sName.value=s.name; sKlass.value=s.klass; } }
+      pick.onchange=()=>{ const s=DB.students.find(x=>x.id===pick.value); if (s){ sName.value=s.name; sKlass.value=s.klass; } };
+      dlg.querySelector('#btnSaveStudent').onclick = async (e)=>{ e.preventDefault(); const s=DB.students.find(x=>x.id===pick.value); if (!s) return; s.name=sName.value.trim(); s.klass=Number(sKlass.value); await saveDB(true); refresh(); renderAll(); };
+      dlg.querySelector('#btnDeleteStudent').onclick = async (e)=>{ e.preventDefault(); const s=DB.students.find(x=>x.id===pick.value); if (!s) return; if (!confirm(`Ta bort ${s.name}?`)) return; for (const l of DB.lessons){ l.studentIds=l.studentIds.filter(id=>id!==s.id); } DB.students=DB.students.filter(x=>x.id!==s.id); await saveDB(true); refresh(); renderAll(); };
+      dlg.querySelector('#btnAddStudent').onclick = async (e)=>{ e.preventDefault(); const name=nName.value.trim(); const klass=Number(nKlass.value); if (!name || !(klass>=7 && klass<=9)){ alert("Fyll i namn och klass 7–9."); return; } DB.students.push({ id:crypto.randomUUID(), name, klass, absentDates:[] }); nName.value=""; nKlass.value=""; await saveDB(true); refresh(); renderAll(); };
+      refresh(); dlg.showModal();
+    }
+    function openColorDialog(){
+      const dlg=document.getElementById('dlgColors'); const rows=document.getElementById('colorRows'); rows.innerHTML="";
+      const subjects = Array.from(new Set(DB.lessons.map(l=>l.subject))).sort((a,b)=>a.localeCompare(b));
+      for (const subj of subjects){
+        const div=document.createElement('div'); div.className="row full"; const label=document.createElement('label'); label.textContent=subj; label.style.width="200px";
+        const input=document.createElement('input'); input.type="color";
+        const tmp=document.createElement('div'); tmp.style.color=ensureColorForSubject(subj); document.body.appendChild(tmp);
+        const rgb=getComputedStyle(tmp).color; document.body.removeChild(tmp);
+        const m=rgb.match(/(\d+),\s*(\d+),\s*(\d+)/); let hex="#888888"; if (m){ const r=Number(m[1]).toString(16).padStart(2,'0'); const g=Number(m[2]).toString(16).padStart(2,'0'); const b=Number(m[3]).toString(16).padStart(2,'0'); hex=`#${r}${g}${b}`; }
+        input.value=hex; input.dataset.subject=subj; div.appendChild(label); div.appendChild(input); rows.appendChild(div);
+      }
+      dlg.showModal();
+      dlg.querySelector('#btnResetAuto').onclick = async (e)=>{ e.preventDefault(); DB.subjectColors={}; await saveDB(true); openColorDialog(); renderAll(); };
+      dlg.querySelector('#btnSaveColors').onclick = async (e)=>{ e.preventDefault(); const inputs=rows.querySelectorAll('input[type=color]'); for (const inp of inputs){ DB.subjectColors[inp.dataset.subject]=inp.value; } await saveDB(true); dlg.close(); renderAll(); };
+    }
+
+    // ===== Events =====
+    document.getElementById('btnAddLesson').onclick = ()=> openLessonDialog();
+    document.getElementById('btnEditLesson').onclick = ()=> openPickLesson();
+    document.getElementById('btnEditStudent').onclick = ()=> openStudentDialog();
+    document.getElementById('btnEditColors').onclick = ()=> openColorDialog();
+    document.getElementById('btnPassword').onclick = ()=> openPasswordDialog();
+    document.getElementById('weekday').onchange = ()=> renderAll();
+    document.getElementById('btnPickDB').onclick = ()=> pickDB();
+    document.getElementById('btnSaveNow').onclick = ()=> saveDB(true);
+    document.getElementById('autoSave').onchange = (e)=>{ autoSave = e.target.checked; };
+    document.getElementById('conflictIconPicker').onchange = async (e)=>{ const f=e.target.files?.[0]; if (!f) return; const buf=await f.arrayBuffer(); const b64=btoa(String.fromCharCode(...new Uint8Array(buf))); DB.settings=DB.settings||{}; DB.settings.conflictIconDataURL=`data:image/png;base64,${b64}`; await saveDB(true); renderAll(); };
+
+    // ===== Auto-open logic =====
+    async function tryAutoOpen(){
+      // 1) URL alias ?db=... or config default
+      const u=new URL(location.href);
+      dbAlias = u.searchParams.get('db') || window.__DEFAULT_DB_ALIAS__ || null;
+      setAliasPill();
+      if (dbAlias){
+        const h = await resolveAliasHandle(dbAlias);
+        if (h){ fileHandle=h; await loadFromHandle(); return true; }
+      }
+      return false;
+    }
+
+    // 2) File Handling API (double-click *.schema.json)
+    if ('launchQueue' in window && 'files' in LaunchParams.prototype){
+      launchQueue.setConsumer(async (params)=>{
+        if (!params.files?.length) return;
+        // Use the first file (ignore multiple)
+        const handle = params.files[0];
+        fileHandle = handle;
+        if (dbAlias) await bindAliasToHandle(dbAlias, handle);
+        await loadFromHandle();
+        autoSave = true; document.getElementById('autoSave').checked = true;
+      });
+    }
+
+    // ===== Init =====
+    (async ()=>{
+      // Service worker (PWA)
+      if ('serviceWorker' in navigator){ navigator.serviceWorker.register('sw.js'); }
+      // Read config.json (for default alias)
+      try{
+        const resp = await fetch('config.json', {cache:'no-store'});
+        if (resp.ok){ const cfg=await resp.json(); if (cfg.defaultDbAlias) window.__DEFAULT_DB_ALIAS__ = cfg.defaultDbAlias; }
+      }catch{}
+      // weekday -> today (Mon..Fri; weekend fallback)
+      const jsDay=(new Date()).getDay(); document.getElementById('weekday').value=String(jsDay===0?1:jsDay===6?5:jsDay);
+      // Local cache render
+      loadLocal(); renderAll(); updateLockState();
+      // Try auto-open via alias
+      const opened = await tryAutoOpen();
+      // First-run overlay if no alias-bound handle
+      const fr = document.getElementById('firstRun');
+      if (!opened && !localStorage.getItem('firstRunDone')){ fr.style.display='flex'; }
+      document.getElementById('btnFirstRunClose').onclick = ()=>{ fr.style.display='none'; localStorage.setItem('firstRunDone','1'); };
+    })();
+  </script>
+</body>
+</html>
