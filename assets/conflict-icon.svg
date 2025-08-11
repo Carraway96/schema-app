@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" aria-hidden="true">
+  <defs>
+    <linearGradient id="g" x1="0" x2="0" y1="0" y2="1">
+      <stop offset="0" stop-color="#f7d24c"/>
+      <stop offset="1" stop-color="#f59e0b"/>
+    </linearGradient>
+  </defs>
+  <path d="M12.9 2.7l9.2 16c.8 1.4-.2 3.3-1.9 3.3H3.8c-1.7 0-2.7-1.9-1.9-3.3l9.2-16c.8-1.4 2.8-1.4 3.6 0z" fill="url(#g)"/>
+  <rect x="11" y="8" width="2" height="7" rx="1" ry="1" fill="#fff"/>
+  <rect x="11" y="17" width="2" height="2" rx="1" ry="1" fill="#fff"/>
+  <title>Varningsikon</title>
+</svg>
